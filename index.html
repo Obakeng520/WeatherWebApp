@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Dashboard</title>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for the Temperature Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            /* Palette inspired by the screenshots */
+            --bg-color: #0b1120;        /* Very dark navy background */
+            --card-bg: #1e293b;         /* Dark blue-grey card */
+            --card-hover: #334155;      /* Lighter hover state */
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --accent-yellow: #fbbf24;   /* Sun/Warning */
+            --accent-blue: #38bdf8;     /* Rain/Cold */
+            --accent-purple: #818cf8;   /* UV/Evening */
+            --gradient-card: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* --- Header --- */
+        header {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            gap: 20px;
+        }
+
+        .search-container {
+            display: flex;
+            background: #334155;
+            border-radius: 8px;
+            padding: 8px 15px;
+            align-items: center;
+            flex-grow: 1;
+            max-width: 400px;
+            transition: box-shadow 0.3s ease;
+        }
+        .search-container:focus-within { box-shadow: 0 0 0 2px var(--accent-blue); }
+        .search-container i { color: var(--text-secondary); }
+        .search-container input {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            width: 100%;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        /* --- Main Layout --- */
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* Top Section: Main Info + Chart */
+        .top-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        /* Daily Forecast Row */
+        .forecast-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+
+        /* Grid for Detailed Cards */
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        /* --- Card Components --- */
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-header {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .card-large-value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .card-unit { font-size: 1.5rem; color: var(--text-secondary); font-weight: normal; }
+
+        /* Chart Card */
+        .chart-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+        }
+
+        /* Forecast Card */
+        .forecast-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s;
+        }
+        .forecast-card:hover { background: var(--card-hover); transform: translateY(-3px); }
+        .forecast-day { font-weight: bold; color: var(--text-secondary); font-size: 0.9rem; }
+        .forecast-icon { font-size: 2rem; margin: 5px 0; }
+        .forecast-temp { font-weight: bold; }
+        .forecast-low { color: var(--text-secondary); font-size: 0.9rem; }
+
+        /* Specific Visuals */
+        .compass-circle {
+            width: 80px;
+            height: 80px;
+            border: 4px solid #334155;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+        }
+        .compass-arrow {
+            font-size: 2rem;
+            color: var(--accent-blue);
+            transform-origin: center;
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .compass-label { position: absolute; font-size: 0.7rem; color: var(--text-secondary); font-weight: bold; }
+        .c-n { top: 2px; } .c-e { right: 5px; } .c-s { bottom: 2px; } .c-w { left: 5px; }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 10px;
+            background: #334155;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+            width: 0%;
+            transition: width 1s ease-out;
+        }
+
+        .sun-arc {
+            width: 100%;
+            height: 60px;
+            border-top: 2px dashed var(--text-secondary);
+            border-radius: 50% 50% 0 0;
+            position: relative;
+            margin-top: 20px;
+        }
+        .sun-dot {
+            width: 16px;
+            height: 16px;
+            background: var(--accent-yellow);
+            border-radius: 50%;
+            position: absolute;
+            top: -9px; /* Half height + border */
+            left: 50%; /* JS will calculate this */
+            box-shadow: 0 0 15px var(--accent-yellow);
+        }
+
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Responsive Tweaks */
+        @media (max-width: 768px) {
+            .card-large-value { font-size: 2.5rem; }
+            .top-section { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="search-container">
+            <i class="fas fa-search"></i>
+            <input type="text" id="cityInput" placeholder="Search city..." value="Sandton">
+        </div>
+        <div style="text-align: right;">
+            <div id="displayCity" style="font-size: 1.2rem; font-weight: bold;">--</div>
+            <div id="currentDate" style="font-size: 0.9rem; color: var(--text-secondary);">--</div>
+        </div>
+    </header>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <div class="container">
+
+        <!-- Top Row: Main Forecast & Graph -->
+        <div class="top-section">
+            <!-- Main Current Weather -->
+            <div class="card" style="justify-content: space-between;">
+                <div class="card-header"><i class="fas fa-map-pin"></i> Current Weather</div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <div class="card-large-value" id="tempValue">--°</div>
+                        <div style="font-size: 1.2rem; margin-top: 5px;" id="weatherDesc">--</div>
+                    </div>
+                    <div id="weatherIcon" style="font-size: 4rem; color: var(--accent-yellow);">
+                        <i class="fas fa-sun"></i>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 20px; margin-top: 20px;">
+                    <div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Feels Like</div>
+                        <div style="font-size: 1.1rem; font-weight: bold;" id="feelsLikeValue">--°</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">High / Low</div>
+                        <div style="font-size: 1.1rem; font-weight: bold;" id="highLowValue">-- / --</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hourly Chart -->
+            <div class="card">
+                <div class="card-header"><i class="fas fa-chart-line"></i> Hourly Temperature</div>
+                <div class="chart-container">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5-Day Forecast -->
+        <div class="card" style="background: transparent; box-shadow: none; padding: 0;">
+            <div class="card-header" style="padding-left: 10px;"><i class="fas fa-calendar-alt"></i> 5-Day Forecast</div>
+            <div class="forecast-row" id="forecastContainer">
+                <!-- JS will inject cards here -->
+                <div class="forecast-card"><div class="skeleton" style="width:50px; height:50px;"></div></div>
+                <div class="forecast-card"><div class="skeleton" style="width:50px; height:50px;"></div></div>
+                <div class="forecast-card"><div class="skeleton" style="width:50px; height:50px;"></div></div>
+                <div class="forecast-card"><div class="skeleton" style="width:50px; height:50px;"></div></div>
+                <div class="forecast-card"><div class="skeleton" style="width:50px; height:50px;"></div></div>
+            </div>
+        </div>
+
+        <!-- Details Grid -->
+        <div class="details-grid">
+            
+            <!-- Wind -->
+            <div class="card">
+                <div class="card-header"><i class="fas fa-wind"></i> Wind</div>
+                <div style="text-align: center;">
+                    <div class="compass-circle">
+                        <span class="compass-label c-n">N</span>
+                        <span class="compass-label c-e">E</span>
+                        <span class="compass-label c-s">S</span>
+                        <span class="compass-label c-w">W</span>
+                        <i class="fas fa-location-arrow compass-arrow" id="windArrow"></i>
+                    </div>
+                    <div style="font-size: 1.5rem; font-weight: bold; margin-top: 15px;">
+                        <span id="windSpeed">--</span> <span style="font-size: 1rem; color: var(--text-secondary);">km/h</span>
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 5px;" id="windDirText">--</div>
+                </div>
+            </div>
+
+            <!-- Humidity -->
+            <div class="card">
+                <div class="card-header"><i class="fas fa-tint"></i> Humidity</div>
+                <div style="font-size: 2.5rem; font-weight: bold;" id="humidityValue">--%</div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">Dew Point: <span id="dewPoint">--°</span></div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="humidityBar"></div>
+                </div>
+            </div>
+
+            <!-- Visibility & Pressure -->
+            <div class="card">
+                <div class="card-header"><i class="fas fa-eye"></i> Visibility</div>
+                <div style="font-size: 2.5rem; font-weight: bold;"><span id="visibilityValue">--</span> <span style="font-size: 1.2rem; color: var(--text-secondary);">km</span></div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #334155;">
+                    <div class="card-header" style="margin-bottom: 5px;"><i class="fas fa-tachometer-alt"></i> Pressure</div>
+                    <div style="font-size: 1.5rem; font-weight: bold;"><span id="pressureValue">--</span> <span style="font-size: 1rem; color: var(--text-secondary);">hPa</span></div>
+                </div>
+            </div>
+
+            <!-- Sun -->
+            <div class="card">
+                <div class="card-header"><i class="fas fa-sun"></i> Sun Phase</div>
+                <div class="sun-arc">
+                    <div class="sun-dot" style="left: 20%;"></div> <!-- Static position for demo, can be calculated -->
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                    <div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Sunrise</div>
+                        <div style="font-weight: bold;" id="sunriseTime">--:--</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Sunset</div>
+                        <div style="font-weight: bold;" id="sunsetTime">--:--</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const apiKey = "c757762c64b04d5a34928acd4f7696b4"; 
+        let weatherChart = null;
+
+        // --- 1. Main Function ---
+        async function getWeatherData(city) {
+            const errorBox = document.getElementById("errorMessage");
+            errorBox.style.display = "none";
+
+            try {
+                // Fetch Current Weather
+                const weatherRes = await fetch(`https://api.openweathermap.org/data/2.5/weather?units=metric&q=${city}&appid=${apiKey}`);
+                if (!weatherRes.ok) throw new Error("City not found");
+                const currentData = await weatherRes.json();
+
+                // Fetch Forecast (5 Day / 3 Hour)
+                const forecastRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?units=metric&q=${city}&appid=${apiKey}`);
+                const forecastData = await forecastRes.json();
+
+                updateUI(currentData, forecastData);
+
+            } catch (error) {
+                console.error(error);
+                errorBox.innerText = error.message;
+                errorBox.style.display = "block";
+            }
+        }
+
+        // --- 2. Update UI ---
+        function updateUI(current, forecast) {
+            // Header Info
+            document.getElementById("displayCity").innerText = `${current.name}, ${current.sys.country}`;
+            const now = new Date();
+            document.getElementById("currentDate").innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+            // 1. Current Weather Card
+            document.getElementById("tempValue").innerText = Math.round(current.main.temp) + "°";
+            document.getElementById("weatherDesc").innerText = capitalize(current.weather[0].description);
+            document.getElementById("feelsLikeValue").innerText = Math.round(current.main.feels_like) + "°";
+            document.getElementById("highLowValue").innerText = `${Math.round(current.main.temp_max)}° / ${Math.round(current.main.temp_min)}°`;
+            
+            // Icon
+            const iconCode = current.weather[0].icon;
+            const iconContainer = document.getElementById("weatherIcon");
+            iconContainer.innerHTML = getIconHTML(iconCode);
+            iconContainer.style.color = getIconColor(iconCode);
+
+            // 2. Wind
+            const speedKmh = (current.wind.speed * 3.6).toFixed(1);
+            document.getElementById("windSpeed").innerText = speedKmh;
+            const rotation = current.wind.deg - 45; // Adjust for FontAwesome icon angle
+            document.getElementById("windArrow").style.transform = `rotate(${rotation}deg)`;
+            document.getElementById("windDirText").innerText = getCardinalDirection(current.wind.deg);
+
+            // 3. Humidity
+            document.getElementById("humidityValue").innerText = current.main.humidity + "%";
+            document.getElementById("humidityBar").style.width = current.main.humidity + "%";
+            const dewPoint = Math.round(current.main.temp - ((100 - current.main.humidity) / 5));
+            document.getElementById("dewPoint").innerText = dewPoint + "°";
+
+            // 4. Visibility & Pressure
+            document.getElementById("visibilityValue").innerText = (current.visibility / 1000).toFixed(1);
+            document.getElementById("pressureValue").innerText = current.main.pressure;
+
+            // 5. Sun Times
+            document.getElementById("sunriseTime").innerText = formatTime(current.sys.sunrise);
+            document.getElementById("sunsetTime").innerText = formatTime(current.sys.sunset);
+
+            // 6. Process Forecast Data
+            updateForecast(forecast);
+        }
+
+        function updateForecast(data) {
+            // A. Hourly Chart (First 8 data points = 24 hours)
+            const hourlyData = data.list.slice(0, 8);
+            const labels = hourlyData.map(item => {
+                const date = new Date(item.dt * 1000);
+                return date.getHours() + ":00";
+            });
+            const temps = hourlyData.map(item => item.main.temp);
+
+            renderChart(labels, temps);
+
+            // B. Daily Forecast (Filter for noon data roughly every 24h)
+            const dailyData = data.list.filter(item => item.dt_txt.includes("12:00:00"));
+            const forecastContainer = document.getElementById("forecastContainer");
+            forecastContainer.innerHTML = ""; // Clear loader
+
+            dailyData.forEach(day => {
+                const date = new Date(day.dt * 1000);
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                const temp = Math.round(day.main.temp);
+                const icon = day.weather[0].icon;
+
+                const card = `
+                    <div class="forecast-card">
+                        <div class="forecast-day">${dayName}</div>
+                        <div class="forecast-icon" style="color: ${getIconColor(icon)}">
+                            ${getIconHTML(icon)}
+                        </div>
+                        <div>
+                            <span class="forecast-temp">${temp}°</span>
+                        </div>
+                        <div class="forecast-low">${capitalize(day.weather[0].main)}</div>
+                    </div>
+                `;
+                forecastContainer.innerHTML += card;
+            });
+        }
+
+        // --- 3. Chart.js Logic ---
+        function renderChart(labels, data) {
+            const ctx = document.getElementById('hourlyChart').getContext('2d');
+            
+            // Destroy previous chart if exists
+            if (weatherChart) weatherChart.destroy();
+
+            // Create Gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+            gradient.addColorStop(0, 'rgba(56, 189, 248, 0.5)'); // Light blue
+            gradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
+
+            weatherChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Temp (°C)',
+                        data: data,
+                        borderColor: '#38bdf8',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#38bdf8',
+                        fill: true,
+                        tension: 0.4 // Smooth curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            display: false, // Hide Y axis for cleaner look
+                            beginAtZero: false
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Helpers ---
+        function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
+        
+        function formatTime(timestamp) {
+            return new Date(timestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function getCardinalDirection(deg) {
+            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            return directions[Math.round(deg / 45) % 8];
+        }
+
+        function getIconHTML(code) {
+            if(code.includes("n")) return '<i class="fas fa-moon"></i>';
+            if(code.includes("01") || code.includes("02")) return '<i class="fas fa-sun"></i>';
+            if(code.includes("03") || code.includes("04")) return '<i class="fas fa-cloud"></i>';
+            if(code.includes("09") || code.includes("10")) return '<i class="fas fa-cloud-rain"></i>';
+            if(code.includes("11")) return '<i class="fas fa-bolt"></i>';
+            if(code.includes("13")) return '<i class="fas fa-snowflake"></i>';
+            return '<i class="fas fa-smog"></i>';
+        }
+
+        function getIconColor(code) {
+            if(code.includes("n")) return "#cbd5e1"; // Moon/Night
+            if(code.includes("01") || code.includes("02")) return "#fbbf24"; // Sun
+            if(code.includes("09") || code.includes("10")) return "#38bdf8"; // Rain
+            return "#94a3b8"; // Clouds/Default
+        }
+
+        // --- Event Listeners ---
+        const input = document.getElementById("cityInput");
+        input.addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                getWeatherData(input.value);
+            }
+        });
+
+        // --- Init ---
+        getWeatherData("Sandton");
+
+    </script>
+</body>
+</html>
